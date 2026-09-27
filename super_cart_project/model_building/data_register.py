@@ -1,5 +1,8 @@
 RAW_PATH = "super_cart_project/data/SuperKart.csv"
 
+
+import pandas as pd
+
 # Load the raw dataset
 df = pd.read_csv(RAW_PATH)
 
