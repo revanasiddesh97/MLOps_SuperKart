@@ -5,14 +5,14 @@ from sklearn.compose import make_column_transformer
 from sklearn.pipeline import make_pipeline
 import xgboost as xgb
 from sklearn.model_selection import GridSearchCV
-from sklearn.metrics import classification_report
+from sklearn.metrics import mean_squared_error, r2_score # Changed to regression metrics
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 # for model serialization and experiment tracking
 import joblib
 import mlflow
 
 mlflow.set_tracking_uri("http://localhost:5000")
-mlflow.set_experiment("SuperKart-Experiment")
+mlflow.set_experiment("SuperKart-Prediction")
 
 # Xtrain/Xtest/ytrain/ytest are downloaded from the previous job's artifact
 Xtrain = pd.read_csv("Xtrain.csv")
@@ -28,25 +28,24 @@ categorical_features = [
     'Store_Location_City_Type', 'Store_Type'
 ]
 
-# Set the class weight to handle class imbalance
-class_weight = ytrain.value_counts()[0] / ytrain.value_counts()[1]
+# Removed class_weight as it's not applicable for regression
 
 # Define the preprocessing steps
 preprocessor = make_column_transformer(
     (StandardScaler(), numeric_features),
     (OneHotEncoder(handle_unknown='ignore'), categorical_features)
 )
-# Define base XGBoost model
-xgb_model = xgb.XGBClassifier(scale_pos_weight=class_weight, random_state=42)
+# Define base XGBoost model - Changed to XGBRegressor for regression task
+xgb_model = xgb.XGBRegressor(random_state=42) # Removed scale_pos_weight
 
-# Define hyperparameter grid
+# Define hyperparameter grid - Changed prefixes for XGBRegressor
 param_grid = {
-    'xgbclassifier__n_estimators': [50, 75, 100, 125, 150],
-    'xgbclassifier__max_depth': [2, 3, 4],
-    'xgbclassifier__colsample_bytree': [0.4, 0.5, 0.6],
-    'xgbclassifier__colsample_bylevel': [0.4, 0.5, 0.6],
-    'xgbclassifier__learning_rate': [0.01, 0.05, 0.1],
-    'xgbclassifier__reg_lambda': [0.4, 0.5, 0.6],
+    'xgbregressor__n_estimators': [50, 75, 100, 125, 150],
+    'xgbregressor__max_depth': [2, 3, 4],
+    'xgbregressor__colsample_bytree': [0.4, 0.5, 0.6],
+    'xgbregressor__colsample_bylevel': [0.4, 0.5, 0.6],
+    'xgbregressor__learning_rate': [0.01, 0.05, 0.1],
+    'xgbregressor__reg_lambda': [0.4, 0.5, 0.6],
 }
 # Model pipeline
 model_pipeline = make_pipeline(preprocessor, xgb_model)
@@ -54,7 +53,7 @@ model_pipeline = make_pipeline(preprocessor, xgb_model)
 # Start MLflow run
 with mlflow.start_run():
     # Hyperparameter tuning with GridSearchCV
-    grid_search = GridSearchCV(model_pipeline, param_grid, cv=5, n_jobs=-1)
+    grid_search = GridSearchCV(model_pipeline, param_grid, cv=5, n_jobs=-1, scoring='neg_mean_squared_error') # Added scoring for regression
     grid_search.fit(Xtrain, ytrain)
 
     # Log every parameter combination tried during the search as a nested run,
@@ -70,32 +69,26 @@ with mlflow.start_run():
     mlflow.log_params(grid_search.best_params_)
 
     # Store the best model
-    best_model = grid_search.best_estimator_
+    best_model = grid_search.best_estimator_;
 
-    # Set classification threshold
-    classification_threshold = 0.45
+    # Removed classification_threshold and probability predictions
 
     # Make predictions on the training and test data
-    y_pred_train_proba = best_model.predict_proba(Xtrain)[:, 1]
-    y_pred_train = (y_pred_train_proba >= classification_threshold).astype(int)
+    y_pred_train = best_model.predict(Xtrain)
+    y_pred_test = best_model.predict(Xtest)
 
-    y_pred_test_proba = best_model.predict_proba(Xtest)[:, 1]
-    y_pred_test = (y_pred_test_proba >= classification_threshold).astype(int)
-
-    # Evaluation
-    train_report = classification_report(ytrain, y_pred_train, output_dict=True)
-    test_report = classification_report(ytest, y_pred_test, output_dict=True)
+    # Evaluation - Changed to regression metrics
+    train_rmse = mean_squared_error(ytrain, y_pred_train)**0.5
+    test_rmse = mean_squared_error(ytest, y_pred_test)**0.5
+    train_r2 = r2_score(ytrain, y_pred_train)
+    test_r2 = r2_score(ytest, y_pred_test)
 
     # Log metrics
     mlflow.log_metrics({
-        "train_accuracy": train_report['accuracy'],
-        "train_precision": train_report['1']['precision'],
-        "train_recall": train_report['1']['recall'],
-        "train_f1-score": train_report['1']['f1-score'],
-        "test_accuracy": test_report['accuracy'],
-        "test_precision": test_report['1']['precision'],
-        "test_recall": test_report['1']['recall'],
-        "test_f1-score": test_report['1']['f1-score']
+        "train_rmse": train_rmse,
+        "test_rmse": test_rmse,
+        "train_r2_score": train_r2,
+        "test_r2_score": test_r2
     })
 
     # Save the model next to app.py so the Streamlit app can load it directly,
