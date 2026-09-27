@@ -9,7 +9,7 @@ df.drop(columns=["Product_Id"], inplace=True)
 # raw category values. Encoding them here (e.g. LabelEncoder) would make training
 # and serving use different representations, silently breaking predictions.
 
-target = "ProdTaken"
+target = "Product_Store_Sales_Total"
 X = df.drop(columns=[target])
 y = df[target]
 
