@@ -5,7 +5,7 @@ import streamlit as st
 
 # Load the trained regression model committed by the pipeline
 model_path = os.path.join(
-    os.path.dirname(__file__), "super_cart_project/deployment/super_cart_package_model_v1.joblib"
+    os.path.dirname(__file__), "super_cart_package_model_v1.joblib"
 )
 model = joblib.load(model_path)
 
