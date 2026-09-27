@@ -13,9 +13,9 @@ target = "Product_Store_Sales_Total"
 X = df.drop(columns=[target])
 y = df[target]
 
-# stratify=y keeps the (imbalanced) purchase ratio consistent across splits
+# Removed stratify=y as it's not applicable for regression tasks.
 Xtrain, Xtest, ytrain, ytest = train_test_split(
-    X, y, test_size=0.2, random_state=42, stratify=y
+    X, y, test_size=0.2, random_state=42
 )
 
 Xtrain.to_csv("Xtrain.csv", index=False)
